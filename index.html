@@ -1,0 +1,919 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <!-- Crucial for responsive design -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>SIMPLE CHAT BOT</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+        /* Base styles */
+        html, body {
+            height: 100%; /* Ensure html and body take full height */
+            overflow: hidden; /* Prevent body scrolling */
+            overscroll-behavior: none; /* Prevent pull-to-refresh issues */
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6; /* Match container background */
+        }
+
+        /* Main App Container - Use dynamic viewport height */
+        .main-app-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh; /* Fallback */
+            height: 100dvh; /* Use dynamic viewport height */
+            background-color: white;
+            max-width: 48rem; /* Consistent max-width like original */
+            margin: 0 auto;   /* Center on larger screens */
+            box-shadow: 0 0 20px rgba(0,0,0,0.1); /* Optional shadow for larger screens */
+        }
+
+        /* Header */
+        .app-header {
+            flex-shrink: 0; /* Prevent header from shrinking */
+            border-bottom: 1px solid #e5e7eb;
+            padding: 0.75rem 1rem; /* Reduced padding */
+        }
+        .app-header h1 {
+            font-size: 1.1rem; /* Slightly smaller title */
+            font-weight: 700;
+        }
+        .app-header .tab {
+             padding: 0.25rem 0.5rem; /* Smaller tabs */
+             font-size: 0.8rem; /* Smaller tab text */
+             align-items: center;
+             gap: 0.25rem; /* Reduced gap */
+        }
+        .app-header .tab i {
+            font-size: 0.9em; /* Slightly smaller icon */
+        }
+
+        /* Dialogue Area - Takes remaining space */
+        .dialogue-area {
+            flex-grow: 1; /* Allow dialogue area to take up available space */
+            overflow: hidden; /* Hide overflow, children will scroll */
+            display: flex;
+            flex-direction: column;
+            position: relative; /* Needed for absolute positioned children if any */
+        }
+
+        /* Container for Single Response Mode */
+        #singleResponseDisplay {
+            flex-grow: 1; /* Take available space in dialogue area */
+            overflow: hidden; /* Let child scroll */
+            padding: 0.75rem; /* Reduced padding */
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start; /* Align content top */
+            align-items: center; /* Center horizontally */
+        }
+        /* Container for Chat Mode */
+        #chatModeArea {
+            flex-grow: 1; /* Take available space in dialogue area */
+            overflow-y: auto; /* Enable vertical scrolling */
+            padding: 0.75rem; /* Reduced padding */
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem; /* Slightly reduced gap */
+            scrollbar-width: thin;
+            scrollbar-color: #9ca3af #e5e7eb;
+        }
+        #chatModeArea::-webkit-scrollbar { width: 5px; }
+        #chatModeArea::-webkit-scrollbar-track { background: #e5e7eb; border-radius: 3px;}
+        #chatModeArea::-webkit-scrollbar-thumb { background-color: #9ca3af; border-radius: 3px; }
+        #singleResponseDisplay.hidden, #chatModeArea.hidden { display: none; }
+
+        /* Single User Prompt Box */
+        #userPromptBox {
+            display: flex; justify-content: center; align-items: center;
+            width: 100%; /* Take full width */
+            max-width: 100%; /* Override Tailwind default */
+            margin-bottom: 0.75rem; /* Reduced margin */
+            flex-shrink: 0; /* Don't shrink */
+            padding: 0 0.5rem; /* Add slight horizontal padding */
+        }
+        .user-bubble {
+            background-color: #374151; color: #f3f4f6;
+            border-radius: 0.5rem; padding: 0.6rem 1rem; /* Slightly reduced padding */
+            max-width: 95%; text-align: center;
+            box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+            font-size: 0.95rem; /* Slightly smaller font */
+            opacity: 0; animation: fadeInUser 0.4s 0.1s ease-out forwards;
+            overflow-wrap: break-word; line-height: 1.5;
+        }
+        .user-bubble p { margin: 0; padding: 0; }
+        @keyframes fadeInUser { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Single AI Response Box */
+        #aiResponseBox {
+            position: relative; background-color: #f3f4f6; /* Lighter background */
+            border-radius: 0.75rem;
+            padding: 1rem 1.25rem; /* Adjusted padding */
+            padding-bottom: 3.5rem; /* Extra space for buttons */
+            width: 100%; /* Take full width */
+            max-width: 100%; /* Override Tailwind default */
+            flex-grow: 1; /* Allow box to grow to fill space */
+            overflow-y: auto; /* Enable scrolling */
+            display: flex; flex-direction: column;
+            justify-content: flex-start; align-items: stretch;
+            box-shadow: 0 2px 4px -1px rgb(0 0 0 / 0.08);
+            border: 1px solid #e5e7eb;
+            opacity: 0; transform: translateY(20px) scale(0.95);
+            scrollbar-width: none; -ms-overflow-style: none; /* Hide scrollbar */
+            /* Remove fixed heights, let flexbox handle it */
+            /* min-height: 320px; max-height: 70vh; REMOVED */
+        }
+        #aiResponseBox::-webkit-scrollbar { display: none; }
+        #aiResponseBox.visible { animation: displayScreen 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards; }
+        @keyframes displayScreen { 0% { opacity: 0; transform: translateY(20px) scale(0.95); } 60% { opacity: 0.8; transform: translateY(-5px) scale(1.02); } 100% { opacity: 1; transform: translateY(0) scale(1); } }
+
+
+        /* Single AI Response Content */
+        #aiResponseContent {
+            width: 100%; text-align: left; color: #1f2937;
+            font-size: 0.95rem; /* Slightly smaller */
+            line-height: 1.6; overflow-wrap: break-word; flex-grow: 1;
+        }
+
+        /* Markdown Styles (adjustments) */
+        .markdown-content p { margin-bottom: 0.6rem; }
+        .markdown-content ul, .markdown-content ol { margin-left: 1.25rem; margin-bottom: 0.6rem; }
+        .markdown-content li { margin-bottom: 0.2rem; }
+        .markdown-content code { font-size: 0.85em; }
+        .markdown-content pre { padding: 0.6rem; margin-bottom: 0.6rem; }
+        .markdown-content pre code { font-size: 0.85rem; line-height: 1.4; }
+        .markdown-content blockquote { padding-left: 0.75rem; margin-bottom: 0.6rem; }
+        .markdown-content img { max-height: 350px; } /* Reduced max image height */
+
+        /* Code Block Copy Button */
+        .markdown-content pre .code-copy-button {
+            position: absolute; top: 0.4rem; right: 0.4rem; /* Adjusted */
+            padding: 0.25rem 0.5rem; /* Slightly larger tap area */
+            font-size: 0.75rem; /* Slightly larger */
+        }
+        .markdown-content pre .code-copy-button i { font-size: 0.8em; }
+
+        /* Action Buttons (General Style) */
+        .action-button {
+            background-color: rgba(0, 0, 0, 0.08); border: 1px solid rgba(0, 0, 0, 0.1);
+            color: #4b5563; padding: 0.4rem 0.8rem; /* Increased padding for tap */
+            border-radius: 0.375rem; font-size: 0.75rem; /* Slightly larger base */
+            cursor: pointer; transition: all 0.2s ease-in-out; opacity: 0.8;
+            display: inline-flex; align-items: center; gap: 0.3rem; line-height: 1;
+        }
+        .action-button:hover { background-color: rgba(0, 0, 0, 0.15); opacity: 1; }
+        .action-button.copied { background-color: #10b981; color: white; opacity: 1; border-color: #059669;}
+        .action-button .btn-text { font-size: 0.7rem; }
+        .action-button i { font-size: 0.8rem; }
+
+        /* Buttons Container for Single Mode */
+        #singleActionButtons {
+            position: absolute; bottom: 0.6rem; right: 0.75rem; /* Adjusted */
+            display: flex; gap: 0.5rem; z-index: 10;
+        }
+
+        /* Chat Mode Messages */
+        .chat-message { display: flex; max-width: 90%; /* Allow slightly wider */ animation: chatFadeIn 0.3s ease-out; }
+        .chat-message.no-animation { animation: none; }
+        .chat-message.user { justify-content: flex-end; margin-left: auto; }
+        .chat-message.bot { justify-content: flex-start; margin-right: auto; }
+        .chat-bubble {
+            padding: 0.5rem 0.8rem; /* Reduced padding */
+            padding-bottom: 2.4rem; /* Adjusted for button space */
+            border-radius: 0.75rem; font-size: 0.9rem; /* Slightly smaller */
+            line-height: 1.5; overflow-wrap: break-word;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05); position: relative;
+        }
+        .chat-message.user .chat-bubble { background-color: #374151; color: #f3f4f6; border-bottom-right-radius: 0.25rem; padding-bottom: 0.5rem; /* Reset bottom padding as no buttons */ }
+        .chat-message.bot .chat-bubble { background-color: #e5e7eb; color: #1f2937; border-bottom-left-radius: 0.25rem; }
+        .chat-message.bot .chat-bubble.image-bubble { padding: 0.5rem; padding-bottom: 2.4rem; } /* Match bubble padding */
+        .chat-message.bot .chat-bubble.image-bubble img { margin: 0 auto 0.4rem auto; }
+        .chat-message.bot .chat-bubble.image-bubble .prompt { font-size: 0.75rem; margin-top: 0; padding: 0 0.5rem; }
+
+        /* Chat Action Buttons Position */
+        .chat-action-buttons {
+            position: absolute; bottom: 0.5rem; right: 0.6rem; /* Adjusted */
+            display: flex; gap: 0.4rem;
+        }
+        @keyframes chatFadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Typing Indicators */
+        .chat-typing-indicator { display: flex; align-items: center; padding: 0.5rem 0.8rem; /* Match bubble padding */ background-color: #e5e7eb; border-radius: 0.75rem; border-bottom-left-radius: 0.25rem; min-height: 38px; /* Consistent height */ }
+        .chat-typing-indicator span, .typing-indicator span { display: inline-block; border-radius: 50%; background-color: #6b7280; animation: typing-dots 1.4s infinite ease-in-out both; }
+        .chat-typing-indicator span { width: 7px; height: 7px; margin: 0 2.5px; } /* Smaller dots */
+        .typing-indicator span { width: 8px; height: 8px; margin: 0 3px; } /* Slightly smaller */
+        .typing-indicator-container { display: flex; justify-content: center; align-items: center; min-height: 80px; /* Reduced */ }
+        .typing-indicator span:nth-child(1), .chat-typing-indicator span:nth-child(1) { animation-delay: -0.32s; }
+        .typing-indicator span:nth-child(2), .chat-typing-indicator span:nth-child(2) { animation-delay: -0.16s; }
+        @keyframes typing-dots { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1.0); } }
+
+        /* Input Area - Critical for mobile */
+        .input-container {
+            border-top: 1px solid #d1d5db;
+            padding: 0.5rem 0.75rem; /* Reduced padding */
+            background-color: #f9fafb;
+            flex-shrink: 0; /* Prevent shrinking when keyboard appears */
+        }
+        .input-field-wrapper {
+            display: flex;
+            align-items: center; /* Align items vertically */
+            gap: 0.5rem; /* Space between input and button */
+        }
+        #userInput {
+            flex-grow: 1; /* Allow input to take available space */
+            border: 1px solid #d1d5db; /* Slightly lighter border */
+            border-radius: 1.25rem; /* More rounded */
+            padding: 0.6rem 1rem; /* Adjusted padding */
+            font-size: 0.95rem; /* Match user bubble */
+            line-height: 1.4; /* Ensure text doesn't jump */
+            min-height: 40px; /* Minimum height */
+            resize: none; /* Prevent manual resize */
+            /* Allow input to grow slightly if needed (optional) */
+            /* max-height: 100px; */
+            /* overflow-y: auto; */
+        }
+        #userInput::placeholder {
+            font-size: 0.9rem; /* Smaller placeholder */
+            color: #9ca3af;
+        }
+        #sendButton {
+            flex-shrink: 0; /* Prevent button shrinking */
+            background-color: black; color: white;
+            border-radius: 50%; /* Circular button */
+            width: 40px; height: 40px; /* Fixed size */
+            display: flex; align-items: center; justify-content: center;
+            padding: 0; /* Remove padding, use fixed size */
+            transition: background-color 0.2s ease-in-out;
+        }
+        #sendButton:hover:not(:disabled) { background-color: #374151; } /* Darker gray hover */
+        #sendButton:disabled { background-color: #9ca3af; cursor: not-allowed; }
+        #sendButton i {
+             font-size: 0.9rem; /* Slightly smaller icon */
+             line-height: 1; /* Ensure icon centers well */
+             margin-left: 1px; /* Fine-tune icon position */
+        }
+
+        #modeInfo {
+            margin-top: 0.35rem; /* Reduced margin */
+            font-size: 0.7rem; /* Smaller info text */
+            text-align: center;
+            color: #6b7280;
+        }
+
+        /* Tab Styles */
+        .tab-active { border-bottom: 2px solid black; font-weight: 600; color: black; }
+        button.tab:not(.tab-active) { color: #6b7280; }
+
+    </style>
+</head>
+<body class="bg-gray-100"> <!-- Changed body background -->
+
+    <!-- Renamed class, applies height/layout -->
+    <div class="main-app-container">
+
+        <!-- Header -->
+        <div class="app-header flex items-center justify-between">
+            <div><h1 class="text-lg font-bold">Chat Bot</h1></div> <!-- Adjusted size -->
+            <div class="flex items-center space-x-1"> <!-- Reduced space -->
+                <button id="chatTab" class="tab px-2 py-1 text-xs flex items-center space-x-1"><i class="fas fa-comments fa-fw"></i><span>Chat</span></button>
+                <button id="textTab" class="tab px-2 py-1 text-xs tab-active flex items-center space-x-1"><i class="fas fa-file-alt fa-fw"></i><span>Text</span></button>
+                <button id="imageTab" class="tab px-2 py-1 text-xs flex items-center space-x-1"><i class="fas fa-image fa-fw"></i><span>Image</span></button>
+            </div>
+        </div>
+
+        <!-- Dialogue Area (Scrollable Content) -->
+        <div class="dialogue-area">
+             <div id="singleResponseDisplay">
+                <div id="userPromptBox"></div>
+                <div id="aiResponseBox">
+                     <div id="aiResponseContent" class="markdown-content">
+                         <p class="text-gray-500 text-center text-sm">Send a message to start...</p>
+                     </div>
+                     <div id="singleActionButtons"></div>
+                </div>
+             </div>
+             <div id="chatModeArea" class="hidden">
+                 <p id="chatModePlaceholder" class="text-center text-gray-500 italic mt-auto mb-auto text-sm">Chat history will appear here.</p>
+             </div>
+        </div>
+
+        <!-- Input Area (Fixed Bottom) -->
+        <div class="input-container">
+            <div class="input-field-wrapper"> <!-- Added wrapper -->
+                <!-- Changed to textarea for potential multi-line, but styled like input -->
+                <textarea id="userInput" placeholder="Ask anything..." rows="1" class="focus:outline-none focus:ring-1 focus:ring-black focus:border-black"></textarea>
+                <button id="sendButton">
+                    <i class="fas fa-arrow-up"></i>
+                </button>
+            </div>
+            <div id="modeInfo">
+                <span>Text mode: Single detailed response.</span>
+            </div>
+        </div>
+
+    </div> <!-- End main-app-container -->
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // ... (Your existing JavaScript should largely work) ...
+            const userInput = document.getElementById('userInput');
+            const sendButton = document.getElementById('sendButton');
+
+            // --- JS Enhancements for Textarea ---
+            function autoResizeTextarea() {
+                userInput.style.height = 'auto'; // Temporarily shrink to get scrollHeight
+                let newHeight = Math.max(40, userInput.scrollHeight); // 40px is min-height
+                 // Optional: Limit max height
+                 // newHeight = Math.min(newHeight, 100); // Limit to 100px max
+                userInput.style.height = newHeight + 'px';
+            }
+
+            userInput.addEventListener('input', autoResizeTextarea);
+
+            // Initial size check in case of pre-filled content
+            autoResizeTextarea();
+
+             // --- Existing JS Setup (Simplified) ---
+            const userPromptBox = document.getElementById('userPromptBox');
+            const aiResponseBox = document.getElementById('aiResponseBox');
+            const aiResponseContent = document.getElementById('aiResponseContent');
+            const singleActionButtonsContainer = document.getElementById('singleActionButtons');
+            const singleResponseDisplay = document.getElementById('singleResponseDisplay');
+            const chatModeArea = document.getElementById('chatModeArea');
+            const chatModePlaceholder = document.getElementById('chatModePlaceholder');
+            const textTab = document.getElementById('textTab');
+            const imageTab = document.getElementById('imageTab');
+            const chatTab = document.getElementById('chatTab');
+            const modeInfo = document.getElementById('modeInfo');
+            const allTabs = [textTab, imageTab, chatTab];
+
+            let currentMode = 'text';
+            let chatHistory = [];
+            let typingIndicatorElement = null;
+
+            // --- Reusable Copy Handler ---
+             function handleCopyClick(textToCopy, buttonElement) {
+                 if (!textToCopy || !buttonElement) return;
+                 navigator.clipboard.writeText(textToCopy).then(() => {
+                     const originalIcon = buttonElement.querySelector('i').outerHTML;
+                     const originalText = buttonElement.querySelector('.btn-text') ? buttonElement.querySelector('.btn-text').outerHTML : '';
+                     // Use specific classes/structure for copied state if needed
+                     const iconElement = buttonElement.querySelector('i');
+                     const textElement = buttonElement.querySelector('.btn-text');
+                     if(iconElement) iconElement.className = 'fas fa-check';
+                     if(textElement) textElement.textContent = 'Copied!';
+                     else buttonElement.innerHTML = '<i class="fas fa-check"></i>'; // Fallback if no text span
+
+                     buttonElement.classList.add('copied');
+                     setTimeout(() => {
+                          buttonElement.innerHTML = originalIcon + (originalText || ''); // Restore
+                          buttonElement.classList.remove('copied');
+                     }, 1500);
+                 }).catch(err => {
+                     console.error('Failed to copy: ', err);
+                     const originalIcon = buttonElement.querySelector('i').outerHTML;
+                     const originalText = buttonElement.querySelector('.btn-text') ? buttonElement.querySelector('.btn-text').outerHTML : '';
+                     const iconElement = buttonElement.querySelector('i');
+                     const textElement = buttonElement.querySelector('.btn-text');
+                     if(iconElement) iconElement.className = 'fas fa-exclamation-triangle';
+                     if(textElement) textElement.textContent = 'Error';
+                      else buttonElement.innerHTML = '<i class="fas fa-exclamation-triangle"></i>'; // Fallback
+
+                     setTimeout(() => { buttonElement.innerHTML = originalIcon + (originalText || ''); }, 1500);
+                 });
+             }
+
+             // --- Reusable Download Handler ---
+            function handleDownloadClick(url, filename = 'download') {
+                 if (!url) return;
+                 const safeFilename = filename.replace(/[^a-z0-9_\-\.]/gi, '_').toLowerCase().substring(0, 50) || 'image';
+                 const link = document.createElement('a');
+                 link.href = url;
+
+                 // Try to fetch as blob to potentially get a better filename/type later
+                 fetch(url, { mode: 'cors' }) // Need CORS mode potentially
+                    .then(response => {
+                        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                        return response.blob();
+                    })
+                    .then(blob => {
+                        const blobUrl = window.URL.createObjectURL(blob);
+                        link.href = blobUrl;
+                        // Try to determine extension from blob type or URL
+                        let extension = '.png'; // Default
+                        if (blob.type && blob.type.startsWith('image/')) {
+                            extension = '.' + blob.type.split('/')[1];
+                        } else {
+                            const urlExtMatch = url.match(/\.(\w+)(\?|$)/);
+                            if (urlExtMatch) extension = '.' + urlExtMatch[1];
+                        }
+                        link.download = `${safeFilename}${extension}`;
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                        window.URL.revokeObjectURL(blobUrl);
+                    })
+                    .catch(error => {
+                        console.warn("Could not fetch as blob (CORS issue?) or other error, attempting direct download:", error);
+                        // Fallback: Use original URL, filename might be less ideal
+                        link.download = `${safeFilename}.png`; // Assume png as fallback
+                        link.target = '_blank'; // Try opening in new tab as another fallback
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                    });
+            }
+
+            // --- Helper to Add Copy Button to Code Blocks ---
+            function addCopyButtonsToCodeBlocks(container) {
+                const codeBlocks = container.querySelectorAll('pre');
+                codeBlocks.forEach(pre => {
+                    if (pre.querySelector('.code-copy-button')) return;
+                    const code = pre.querySelector('code');
+                    if (!code || !code.innerText.trim()) return; // Don't add for empty blocks
+
+                    const copyButton = document.createElement('button');
+                    copyButton.classList.add('code-copy-button', 'action-button');
+                    copyButton.innerHTML = '<i class="fas fa-copy"></i>'; // Icon only is fine for space
+                    copyButton.title = 'Copy code';
+                    copyButton.addEventListener('click', (e) => {
+                         e.stopPropagation(); // Prevent potential parent clicks
+                        handleCopyClick(code.innerText, copyButton);
+                    });
+                    // Ensure pre is positioned if not already
+                    if (window.getComputedStyle(pre).position === 'static') {
+                        pre.style.position = 'relative';
+                    }
+                    pre.appendChild(copyButton);
+                });
+            }
+
+
+            // --- Render Full Chat History ---
+            function renderFullChat(animateLast = false) {
+                chatModeArea.innerHTML = '';
+                if(chatHistory.length === 0) {
+                    // Recreate placeholder if needed
+                    const placeholder = document.createElement('p');
+                    placeholder.id = 'chatModePlaceholder';
+                    placeholder.className = 'text-center text-gray-500 italic mt-auto mb-auto text-sm';
+                    placeholder.textContent = 'Chat history will appear here.';
+                    chatModeArea.appendChild(placeholder);
+                    return;
+                } else {
+                     // Placeholder might already exist but be hidden by CSS, ensure it's removed from flow
+                    const existingPlaceholder = document.getElementById('chatModePlaceholder');
+                     if(existingPlaceholder) existingPlaceholder.style.display = 'none';
+                }
+
+                chatHistory.forEach((msg, index) => {
+                     const isLast = index === chatHistory.length - 1;
+                     addChatMessage(msg.sender, msg.content, msg.type, !animateLast || !isLast);
+                });
+                 // Ensure scroll to bottom after rendering full history
+                 // Use requestAnimationFrame for better timing after DOM updates
+                 requestAnimationFrame(() => {
+                     chatModeArea.scrollTop = chatModeArea.scrollHeight;
+                 });
+            }
+
+
+            function setMode(newMode) {
+                currentMode = newMode;
+                allTabs.forEach(tab => tab.classList.remove('tab-active'));
+                const modeInfoSpan = modeInfo.querySelector('span'); // Get the span inside
+
+                if (newMode === 'text') {
+                    textTab.classList.add('tab-active');
+                    if(modeInfoSpan) modeInfoSpan.textContent = 'Text mode: Single detailed response.';
+                    userInput.placeholder = "Ask anything...";
+                    singleResponseDisplay.classList.remove('hidden');
+                    chatModeArea.classList.add('hidden');
+                    // Reset single view only if it wasn't already showing this mode's placeholder
+                    if (aiResponseContent.textContent !== "Send a message to get a response.") {
+                         displayUserMessage(""); // Clear user prompt
+                         displayAiResponse("Send a message to get a response."); // Show placeholder
+                         aiResponseBox.classList.remove('visible'); // Ensure it's hidden initially
+                    }
+
+                } else if (newMode === 'image') {
+                    imageTab.classList.add('tab-active');
+                    if(modeInfoSpan) modeInfoSpan.textContent = 'Image mode: Single image visualization.';
+                    userInput.placeholder = "Describe an image...";
+                    singleResponseDisplay.classList.remove('hidden');
+                    chatModeArea.classList.add('hidden');
+                     if (aiResponseContent.textContent !== "Describe an image to visualize.") {
+                        displayUserMessage("");
+                        displayAiResponse("Describe an image to visualize.");
+                        aiResponseBox.classList.remove('visible');
+                     }
+
+                } else if (newMode === 'chat') {
+                    chatTab.classList.add('tab-active');
+                    if(modeInfoSpan) modeInfoSpan.textContent = 'Chat mode: Full conversation history.';
+                    userInput.placeholder = "Start chatting...";
+                    singleResponseDisplay.classList.add('hidden');
+                    chatModeArea.classList.remove('hidden');
+                    renderFullChat(false); // Render chat history
+                }
+                 // Clear single view buttons when switching modes
+                 singleActionButtonsContainer.innerHTML = '';
+            }
+
+            // Initialize mode correctly
+            setMode('text');
+
+            textTab.addEventListener('click', () => setMode('text'));
+            imageTab.addEventListener('click', () => setMode('image'));
+            chatTab.addEventListener('click', () => setMode('chat'));
+
+
+            // --- Display Functions ---
+            function displayUserMessage(content) { // Only for single mode
+                 const safeContent = content ? content.replace(/</g, "<").replace(/>/g, ">") : "";
+                 if(content && content.trim()){
+                    // Using template literals for cleaner HTML structure
+                    userPromptBox.innerHTML = `
+                        <div class="user-bubble">
+                            <p>${safeContent}</p>
+                        </div>`;
+                 } else {
+                     userPromptBox.innerHTML = ''; // Clear if no content
+                 }
+                 // Don't immediately hide response box, let displayAiResponse handle it
+                 // aiResponseBox.classList.remove('visible');
+                 // aiResponseBox.style.animation = 'none';
+                 aiResponseBox.scrollTop = 0;
+                 singleActionButtonsContainer.innerHTML = ''; // Clear buttons
+            }
+
+            function displayAiResponse(content, type = 'text') { // Only for single mode
+                let contentHtml = '';
+                singleActionButtonsContainer.innerHTML = ''; // Clear previous buttons
+
+                // Handle Typing Indicator
+                if (type === 'typing') {
+                    contentHtml = `
+                        <div class="typing-indicator-container">
+                            <div class="typing-indicator"><span></span><span></span><span></span></div>
+                        </div>`;
+                    aiResponseBox.classList.remove('visible'); // Don't animate typing indicator
+                }
+                // Handle Image Response
+                else if (type === 'image' && typeof content === 'object' && content.url) {
+                    // Sanitize prompt display
+                    const safePrompt = content.prompt ? content.prompt.replace(/</g, "<").replace(/>/g, ">") : "Generated image";
+                    contentHtml = `
+                        <img src="${content.url}" alt="${safePrompt}" class="block rounded-md max-w-full h-auto mx-auto my-2 shadow-sm">
+                        <p class="text-gray-600 text-xs italic mt-2 text-center px-1">${safePrompt}</p>
+                        ${content.width && content.height ? `<div class="mt-1 text-xs text-gray-400 text-center"><span class="mr-2">${content.width}x${content.height}</span>${content.seed ? `<span>Seed: ${content.seed}</span>` : ''}</div>` : ''}`;
+
+                    // Add Download Button
+                    const downloadBtn = document.createElement('button');
+                    downloadBtn.classList.add('action-button');
+                    downloadBtn.innerHTML = '<i class="fas fa-download"></i><span class="btn-text ml-1 text-[0.65rem]">Download</span>'; // Smaller text
+                    downloadBtn.title = "Download Image";
+                    downloadBtn.addEventListener('click', () => handleDownloadClick(content.url, content.prompt));
+                    singleActionButtonsContainer.appendChild(downloadBtn);
+
+                    // Add Copy Prompt Button (if prompt exists)
+                    if (content.prompt) {
+                        const copyPromptBtn = document.createElement('button');
+                        copyPromptBtn.classList.add('action-button');
+                        copyPromptBtn.innerHTML = '<i class="fas fa-copy"></i><span class="btn-text ml-1 text-[0.65rem]">Prompt</span>'; // Smaller text
+                        copyPromptBtn.title = "Copy Image Prompt";
+                        copyPromptBtn.addEventListener('click', () => handleCopyClick(content.prompt, copyPromptBtn));
+                        singleActionButtonsContainer.appendChild(copyPromptBtn);
+                    }
+                     aiResponseBox.classList.add('visible'); // Make visible for image
+                }
+                // Handle Text/Placeholder Response
+                else {
+                    const textContent = typeof content === 'string' ? content : '';
+                    const isPlaceholder = textContent === "Send a message to get a response." || textContent === "Describe an image to visualize.";
+
+                    if (isPlaceholder) {
+                         contentHtml = `<p class="text-gray-500 text-center text-sm m-auto">${textContent}</p>`; // Center placeholder
+                         aiResponseBox.classList.remove('visible'); // Placeholders not animated
+                    } else {
+                         // Use DOMPurify if available and concerned about XSS from Markdown
+                         // contentHtml = DOMPurify.sanitize(marked.parse(textContent));
+                         contentHtml = marked.parse(textContent); // Assuming trusted source or basic markdown
+
+                         // Add Copy Text Button (only if there's actual text)
+                         if (textContent.trim()) {
+                             const copyTextBtn = document.createElement('button');
+                             copyTextBtn.classList.add('action-button');
+                             copyTextBtn.innerHTML = '<i class="fas fa-copy"></i><span class="btn-text ml-1 text-[0.65rem]">Copy</span>'; // Smaller text
+                             copyTextBtn.title = "Copy Full Response";
+                             copyTextBtn.addEventListener('click', () => handleCopyClick(textContent, copyTextBtn));
+                             singleActionButtonsContainer.appendChild(copyTextBtn);
+                         }
+                         aiResponseBox.classList.add('visible'); // Make visible for actual response
+                    }
+                }
+
+                aiResponseContent.innerHTML = contentHtml;
+
+                // Add copy buttons for code blocks AFTER content is set
+                if (type === 'text' && !isPlaceholder) {
+                    addCopyButtonsToCodeBlocks(aiResponseContent);
+                }
+
+                aiResponseBox.scrollTop = 0; // Scroll to top of new response
+
+                // Trigger animation only if made visible
+                 if (aiResponseBox.classList.contains('visible')) {
+                    // Force reflow/restart animation
+                    aiResponseBox.style.animation = 'none';
+                    requestAnimationFrame(() => {
+                         aiResponseBox.style.animation = ''; // Re-enable animation defined in CSS
+                     });
+                 }
+            }
+
+            function addChatMessage(sender, content, type = 'text', noAnimate = false) {
+                 const placeholder = document.getElementById('chatModePlaceholder');
+                 if (placeholder) placeholder.style.display = 'none'; // Hide placeholder
+
+                 // Remove existing typing indicator before adding new message (unless it's the typing indicator itself)
+                 if (typingIndicatorElement && (sender !== 'bot' || type !== 'typing')) {
+                     typingIndicatorElement.remove();
+                     typingIndicatorElement = null;
+                 }
+
+                 const messageDiv = document.createElement('div');
+                 messageDiv.classList.add('chat-message', sender);
+                 if (noAnimate) messageDiv.classList.add('no-animation');
+
+                 const bubbleDiv = document.createElement('div');
+                 let buttonsContainer = null; // Initialize here
+
+                 if (sender === 'bot' && type === 'typing') {
+                     // Create or reuse typing indicator
+                     if (!typingIndicatorElement) {
+                         bubbleDiv.classList.add('chat-typing-indicator');
+                         bubbleDiv.innerHTML = `<span></span><span></span><span></span>`;
+                         messageDiv.appendChild(bubbleDiv);
+                         typingIndicatorElement = messageDiv; // Store reference
+                         chatModeArea.appendChild(typingIndicatorElement); // Append immediately
+                     }
+                      // Scroll chat area to bottom for typing indicator
+                      requestAnimationFrame(() => {
+                         chatModeArea.scrollTop = chatModeArea.scrollHeight;
+                      });
+                     return; // Don't process further for typing indicator
+                 }
+                 else {
+                     // Regular message bubble
+                     bubbleDiv.classList.add('chat-bubble');
+                     let currentRawText = ''; // For text copy
+                     let isImage = false;
+                     let imageUrl = '';
+                     let imagePrompt = '';
+
+                     // Prepare buttons container (only for bot messages)
+                     if (sender === 'bot') {
+                         buttonsContainer = document.createElement('div');
+                         buttonsContainer.classList.add('chat-action-buttons');
+                     }
+
+                     if (type === 'image' && typeof content === 'object' && content.url) {
+                         bubbleDiv.classList.add('image-bubble');
+                         isImage = true;
+                         imageUrl = content.url;
+                         imagePrompt = content.prompt || '';
+                         const safePromptDisplay = imagePrompt.replace(/</g, "<").replace(/>/g, ">");
+
+                         const img = document.createElement('img');
+                         img.src = imageUrl; img.alt = safePromptDisplay;
+                         img.classList.add('block', 'rounded', 'max-w-full', 'h-auto', 'mx-auto', 'my-1', 'shadow-sm'); // Basic styling
+                         bubbleDiv.appendChild(img);
+
+                         if (safePromptDisplay) {
+                             const promptP = document.createElement('p');
+                             promptP.classList.add('prompt', 'text-gray-600', 'text-xs', 'italic', 'mt-1', 'text-center', 'px-1');
+                             promptP.textContent = safePromptDisplay;
+                             bubbleDiv.appendChild(promptP);
+                         }
+
+                         // Add Download Button (Chat)
+                         const downloadBtn = document.createElement('button');
+                         downloadBtn.classList.add('action-button');
+                         downloadBtn.innerHTML = '<i class="fas fa-download"></i>';
+                         downloadBtn.title = "Download Image";
+                         downloadBtn.addEventListener('click', (e) => {e.stopPropagation(); handleDownloadClick(imageUrl, imagePrompt);});
+                         buttonsContainer.appendChild(downloadBtn);
+
+                         // Add Copy Prompt Button (Chat)
+                         if (imagePrompt) {
+                             const copyPromptBtn = document.createElement('button');
+                             copyPromptBtn.classList.add('action-button');
+                             copyPromptBtn.innerHTML = '<i class="fas fa-copy"></i>';
+                             copyPromptBtn.title = "Copy Image Prompt";
+                             copyPromptBtn.addEventListener('click', (e) => {e.stopPropagation(); handleCopyClick(imagePrompt, copyPromptBtn);});
+                             buttonsContainer.appendChild(copyPromptBtn);
+                         }
+
+                     } else { // Text message
+                         const textContent = typeof content === 'string' ? content : '';
+                         currentRawText = textContent; // Store raw text
+
+                         if (sender === 'bot') {
+                             bubbleDiv.classList.add('markdown-content');
+                             // Use DOMPurify here if needed
+                             bubbleDiv.innerHTML = marked.parse(textContent);
+                             addCopyButtonsToCodeBlocks(bubbleDiv); // Add copy buttons for code blocks
+
+                             // Add Copy Full Text Button (Chat) only if text exists
+                             if (currentRawText.trim().length > 0) {
+                                 const chatCopyButton = document.createElement('button');
+                                 chatCopyButton.classList.add('action-button');
+                                 chatCopyButton.title = "Copy response";
+                                 chatCopyButton.innerHTML = '<i class="fas fa-copy"></i>';
+                                 chatCopyButton.addEventListener('click', (e) => {
+                                     e.stopPropagation();
+                                     handleCopyClick(currentRawText, e.currentTarget);
+                                 });
+                                 buttonsContainer.appendChild(chatCopyButton);
+                             }
+
+                         } else { // User message
+                             const safeUserContent = textContent.replace(/</g, "<").replace(/>/g, ">");
+                             bubbleDiv.innerHTML = `<p>${safeUserContent}</p>`; // Simple paragraph
+                             // User bubble already has adjusted padding, no buttons needed
+                         }
+                     }
+
+                     // Append buttons container only if it exists and has buttons
+                     if (buttonsContainer && buttonsContainer.hasChildNodes()) {
+                         bubbleDiv.appendChild(buttonsContainer);
+                     }
+
+                     messageDiv.appendChild(bubbleDiv);
+                     chatModeArea.appendChild(messageDiv); // Append the complete message
+                 }
+
+                 // Scroll logic
+                 requestAnimationFrame(() => {
+                    const isScrolledToBottom = chatModeArea.scrollHeight - chatModeArea.clientHeight <= chatModeArea.scrollTop + 30; // Add tolerance
+                     if (!noAnimate || isScrolledToBottom) {
+                          chatModeArea.scrollTo({ top: chatModeArea.scrollHeight, behavior: noAnimate ? 'auto' : 'smooth' });
+                     }
+                 });
+             }
+
+
+             function generateImageParams(prompt) {
+                let enhancedPrompt = prompt;
+                // Simple enhancement logic (can be more sophisticated)
+                 if (prompt && prompt.split(' ').length < 12 && !prompt.match(/style of|realistic|photorealistic|anime|manga|3d render|artwork/i)) {
+                    enhancedPrompt = `Cinematic, highly detailed professional digital painting of ${prompt}. Intricate details, epic lighting, high resolution.`;
+                 } else {
+                     enhancedPrompt = prompt; // Use original if specific style mentioned or long enough
+                 }
+                const seed = Math.floor(Math.random() * 10000000); // Larger seed range
+                // Keep model simple for now, focus on prompt/size
+                let model = 'stable_diffusion_xl'; // Default to XL
+                // Basic aspect ratio logic
+                 let width, height; const rand = Math.random();
+                 if (rand < 0.5) { width = 1024; height = 1024; } // Square
+                 else if (rand < 0.75) { width = 832; height = 1216; } // Portrait
+                 else { width = 1216; height = 832; } // Landscape
+
+                 // Ensure prompt is properly encoded for URL
+                 const encodedPrompt = encodeURIComponent(enhancedPrompt);
+                 const imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${width}&height=${height}&seed=${seed}&model=${model}&nologo=true`;
+
+                 return {
+                     prompt: enhancedPrompt, // Return the (potentially enhanced) prompt used
+                     seed: seed, width: width, height: height, model: model,
+                     url: imageUrl
+                 };
+             }
+
+             async function generateTextResponse(prompt) {
+                 try {
+                     // Slightly refined prompt for Markdown and Emojis
+                    const modifiedPrompt = `You are a helpful assistant. Respond clearly and concisely to the following prompt. Use Markdown formatting (like lists, bold, italics, code blocks) where appropriate to improve readability. Add relevant emojis sparingly. \n\nPrompt: "${prompt}"`;
+                     const apiUrl = `https://text.pollinations.ai/prompt/${encodeURIComponent(modifiedPrompt)}`;
+                     const response = await fetch(apiUrl);
+                     if (!response.ok) {
+                         throw new Error(`Network response was not ok (${response.status} ${response.statusText})`);
+                     }
+                     let text = await response.text();
+
+                     // Basic cleanup of the response
+                     if (text.startsWith('"') && text.endsWith('"')) {
+                         text = text.substring(1, text.length - 1); // Remove surrounding quotes
+                     }
+                     // Replace escaped newlines/quotes, but be careful with markdown code blocks
+                    text = text.replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\'/g, "'").replace(/\\\\/g, '\\');
+
+                     // Trim potential leading/trailing whitespace
+                     text = text.trim();
+
+                     return text;
+                 } catch (error) {
+                     console.error('Error generating text:', error);
+                     // Provide a user-friendly error message using Markdown for code formatting
+                     return `*Sorry, I encountered an error trying to generate a response.* Please try again later.\n\n\`\`\`\nError: ${error.message}\n\`\`\``;
+                 }
+             }
+
+            async function handleSend() {
+                const message = userInput.value.trim();
+                 if (message && !sendButton.disabled) {
+                    userInput.value = ''; // Clear input immediately
+                    autoResizeTextarea(); // Resize textarea back to single line
+                    userInput.disabled = true;
+                    sendButton.disabled = true;
+                    // Update button style for disabled state can be handled by CSS [:disabled] selector
+
+                    const userMessageData = { sender: 'user', content: message, type: 'text', timestamp: new Date() };
+                    chatHistory.push(userMessageData); // Add to history
+
+                    // Display based on mode
+                    if (currentMode === 'chat') {
+                        addChatMessage('user', message);
+                        addChatMessage('bot', '...', 'typing'); // Show typing indicator
+                    } else {
+                        displayUserMessage(message); // Display user prompt in single view
+                        displayAiResponse("...", "typing"); // Show typing indicator in single view
+                    }
+
+                    try {
+                        // Optional: Add a small delay for perceived responsiveness before API call
+                        // await new Promise(resolve => setTimeout(resolve, 100));
+
+                        let responseData = null;
+
+                        if (currentMode === 'image') {
+                            const imageParams = generateImageParams(message);
+                            // Simulate network delay for image generation if needed
+                            // await new Promise(resolve => setTimeout(resolve, 1500));
+                            responseData = { sender: 'bot', content: imageParams, type: 'image', timestamp: new Date() };
+                            displayAiResponse(imageParams, 'image'); // Display in single view
+                        } else { // Text or Chat mode
+                            const textResponse = await generateTextResponse(message);
+                            responseData = { sender: 'bot', content: textResponse, type: 'text', timestamp: new Date() };
+                             if (currentMode === 'chat') {
+                                 addChatMessage('bot', textResponse, 'text'); // Add response to chat
+                             } else {
+                                 displayAiResponse(textResponse, 'text'); // Display response in single view
+                            }
+                        }
+                        chatHistory.push(responseData); // Add bot response to history
+
+                    } catch (error) {
+                         console.error("Error during generation process:", error);
+                         const errorMsg = `*An error occurred processing your request.*\n\n\`\`\`\n${error.message || 'Unknown error'}\n\`\`\``;
+                         chatHistory.push({ sender: 'bot', content: errorMsg, type: 'text', timestamp: new Date() });
+                         if (currentMode === 'chat') { addChatMessage('bot', errorMsg, 'text'); }
+                         else { displayAiResponse(errorMsg, 'text'); }
+                    } finally {
+                         // Remove typing indicator if it's still showing (especially in single view)
+                         if (currentMode !== 'chat' && aiResponseContent.querySelector('.typing-indicator')) {
+                             // If the final response wasn't displayed yet (e.g., error happened fast),
+                             // ensure the typing indicator is removed or replaced by the error.
+                             // displayAiResponse handles placeholders/errors correctly.
+                         } else if (currentMode === 'chat' && typingIndicatorElement) {
+                              typingIndicatorElement.remove();
+                              typingIndicatorElement = null;
+                         }
+
+                         // Re-enable input after a short delay
+                         setTimeout(() => {
+                             userInput.disabled = false;
+                             sendButton.disabled = false;
+                             userInput.focus(); // Focus input for next message
+                         }, 100); // Shorter delay
+                    }
+                }
+            }
+
+            sendButton.addEventListener('click', handleSend);
+            // Handle Enter key press in textarea
+            userInput.addEventListener('keypress', function(e) {
+                // Send on Enter unless Shift is pressed (for new line)
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault(); // Prevent default Enter behavior (new line)
+                    handleSend();
+                }
+            });
+             // Handle keyup for potential future uses (like auto-send off)
+             userInput.addEventListener('keyup', (e) => {
+                 // Example: Enable/disable send button based on content
+                 // sendButton.disabled = userInput.value.trim().length === 0;
+             });
+
+        });
+    </script>
+</body>
+</html>
